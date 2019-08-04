@@ -1,8 +1,10 @@
 [package]
 name = "mimc-rs"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["arnaucube <root@arnaucube.com>"]
 edition = "2018"
+license = "GPL-3.0"
+description = "MIMC7 hash implementation"
 
 [dependencies]
 num = "0.2.0"
