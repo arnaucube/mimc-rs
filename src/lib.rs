@@ -10,8 +10,8 @@ use num_traits::Zero;
 const SEED: &str = "mimc";
 
 pub struct Constants {
-    seed_hash: BigInt,
-    iv: BigInt,
+    // seed_hash: BigInt,
+    // iv: BigInt,
     r: BigInt,
     n_rounds: i64,
     cts: Vec<BigInt>,
@@ -38,15 +38,15 @@ pub fn generate_constants() -> Constants {
     keccak.update(seed_iv.as_bytes());
     keccak.finalize(&mut h_iv);
 
-    let seed_hash: BigInt = BigInt::from_bytes_be(Sign::Plus, &h);
-    let c: BigInt = BigInt::from_bytes_be(Sign::Plus, &h_iv);
-    let iv: BigInt = c % &r;
+    // let seed_hash: BigInt = BigInt::from_bytes_be(Sign::Plus, &h);
+    // let c: BigInt = BigInt::from_bytes_be(Sign::Plus, &h_iv);
+    // let iv: BigInt = c % &r;
     let n_rounds: i64 = 91;
     let cts = get_constants(&r, SEED, n_rounds);
 
     Constants {
-        seed_hash: seed_hash,
-        iv: iv,
+        // seed_hash: seed_hash,
+        // iv: iv,
         r: r,
         n_rounds: n_rounds,
         cts: cts,
@@ -103,6 +103,22 @@ pub fn hash_generic(iv: BigInt, arr: Vec<BigInt>, r: BigInt, n_rounds: i64) -> B
     h
 }
 
+pub fn check_bigint_in_field(a: &BigInt, q: &BigInt) -> bool {
+    if a >= q {
+        return false;
+    }
+    true
+}
+
+pub fn check_bigint_array_in_field(arr: &Vec<BigInt>, q: &BigInt) -> bool {
+    for a in arr {
+        if !check_bigint_in_field(a, &q) {
+            return false;
+        }
+    }
+    true
+}
+
 pub struct Mimc7 {
     constants: Constants,
 }
@@ -114,14 +130,17 @@ impl Mimc7 {
         }
     }
 
-    pub fn hash(&self, arr: Vec<BigInt>) -> BigInt {
-        // TODO check if arr elements are inside the Finite Field over R
+    pub fn hash(&self, arr: Vec<BigInt>) -> Result<BigInt, String> {
+        // check if arr elements are inside the Finite Field over R
+        if !check_bigint_array_in_field(&arr, &self.constants.r) {
+            return Err("elements not inside the finite field over R".to_string());
+        }
         let mut h: BigInt = Zero::zero();
         for i in 0..arr.len() {
             h = &h + &arr[i] + self.mimc7_hash(&arr[i], &h);
             h = modulus(&h, &self.constants.r)
         }
-        modulus(&h, &self.constants.r)
+        Ok(modulus(&h, &self.constants.r))
     }
 
     pub fn mimc7_hash(&self, x_in: &BigInt, k: &BigInt) -> BigInt {
@@ -139,6 +158,20 @@ impl Mimc7 {
             h = modulus(&h, &self.constants.r);
         }
         modulus(&(h + k), &self.constants.r)
+    }
+
+    pub fn hash_bytes(&self, b: Vec<u8>) -> Result<BigInt, String> {
+        let n = 31;
+        let mut ints: Vec<BigInt> = Vec::new();
+        for i in 0..b.len() / n {
+            let v: BigInt = BigInt::from_bytes_le(Sign::Plus, &b[n * i..n * (i + 1)]);
+            ints.push(v);
+        }
+        if b.len() % n != 0 {
+            let v: BigInt = BigInt::from_bytes_le(Sign::Plus, &b[(b.len() / n) * n..]);
+            ints.push(v);
+        }
+        self.hash(ints)
     }
 }
 
@@ -188,6 +221,38 @@ mod tests {
             "10594780656576967754230020536574539122676596303354946869887184401991294982664"
         );
     }
+
+    #[test]
+    fn test_check_bigint_in_field() {
+        let r_0: BigInt = BigInt::parse_bytes(
+            b"21888242871839275222246405745257275088548364400416034343698204186575808495617",
+            10,
+        )
+        .unwrap();
+
+        let mut big_arr0: Vec<BigInt> = Vec::new();
+        big_arr0.push(r_0.clone());
+        let mimc7 = Mimc7::new();
+        let h0 = mimc7.hash(big_arr0);
+        assert_eq!(h0.is_err(), true);
+
+        let r_1: BigInt = BigInt::parse_bytes(
+            b"21888242871839275222246405745257275088548364400416034343698204186575808495616",
+            10,
+        )
+        .unwrap();
+
+        let mut big_arr1: Vec<BigInt> = Vec::new();
+        big_arr1.push(r_1.clone());
+        let mimc7 = Mimc7::new();
+        let h1 = mimc7.hash(big_arr1);
+        assert_eq!(h1.is_err(), false);
+        assert_eq!(
+            h1.unwrap().to_string(),
+            "4664475646327377862961796881776103845487084034023211145221745907673012891406"
+        );
+    }
+
     #[test]
     fn test_mimc7() {
         let b12: BigInt = BigInt::parse_bytes(b"12", 10).unwrap();
@@ -198,7 +263,7 @@ mod tests {
         let mut big_arr1: Vec<BigInt> = Vec::new();
         big_arr1.push(b12.clone());
         let mimc7 = Mimc7::new();
-        let h1 = mimc7.hash(big_arr1);
+        let h1 = mimc7.hash(big_arr1).unwrap();
         let (_, h1_bytes) = h1.to_bytes_be();
         assert_eq!(
             h1_bytes.to_hex(),
@@ -215,7 +280,7 @@ mod tests {
         let mut big_arr2: Vec<BigInt> = Vec::new();
         big_arr2.push(b78.clone());
         big_arr2.push(b41.clone());
-        let h2 = mimc7.hash(big_arr2);
+        let h2 = mimc7.hash(big_arr2).unwrap();
         let (_, h2_bytes) = h2.to_bytes_be();
         assert_eq!(
             h2_bytes.to_hex(),
@@ -225,7 +290,7 @@ mod tests {
         let mut big_arr2: Vec<BigInt> = Vec::new();
         big_arr2.push(b12.clone());
         big_arr2.push(b45.clone());
-        let h1 = mimc7.hash(big_arr2);
+        let h1 = mimc7.hash(big_arr2).unwrap();
         let (_, h1_bytes) = h1.to_bytes_be();
         assert_eq!(
             h1_bytes.to_hex(),
@@ -238,11 +303,21 @@ mod tests {
         big_arr1.push(b78.clone());
         big_arr1.push(b41.clone());
         let mimc7 = Mimc7::new();
-        let h1 = mimc7.hash(big_arr1);
+        let h1 = mimc7.hash(big_arr1).unwrap();
         let (_, h1_bytes) = h1.to_bytes_be();
         assert_eq!(
             h1_bytes.to_hex(),
             "284bc1f34f335933a23a433b6ff3ee179d682cd5e5e2fcdd2d964afa85104beb"
+        );
+    }
+    #[test]
+    fn test_hash_bytes() {
+        let msg = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+        let mimc7 = Mimc7::new();
+        let h = mimc7.hash_bytes(msg.as_bytes().to_vec()).unwrap();
+        assert_eq!(
+            h.to_string(),
+            "16855787120419064316734350414336285711017110414939748784029922801367685456065"
         );
     }
 }
