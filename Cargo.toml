@@ -5,6 +5,8 @@ authors = ["arnaucube <root@arnaucube.com>"]
 edition = "2018"
 license = "GPL-3.0"
 description = "MIMC7 hash implementation"
+repository = "https://github.com/arnaucube/mimc-rs"
+readme = "README.md"
 
 [dependencies]
 num = "0.2.0"

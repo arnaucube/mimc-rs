@@ -64,15 +64,22 @@ pub fn get_constants(r: &BigInt, seed: &str, n_rounds: i64) -> Vec<BigInt> {
 
     let mut c = BigInt::from_bytes_be(Sign::Plus, &h);
     for _ in 1..n_rounds {
+        let (_, c_bytes) = c.to_bytes_be();
+        let mut c_bytes32: [u8;32] = [0;32];
+        let diff = c_bytes32.len() - c_bytes.len();
+        c_bytes32[diff..].copy_from_slice(&c_bytes[..]);
+
         let mut keccak = Keccak::new_keccak256();
         let mut h = [0u8; 32];
-        let (_, c_bytes) = c.to_bytes_be();
         keccak.update(&c_bytes[..]);
         keccak.finalize(&mut h);
         c = BigInt::from_bytes_be(Sign::Plus, &h);
+
         let n = modulus(&c, &r);
         cts.push(n);
     }
+    // let l = cts.len();
+    // cts[l-1] = Zero::zero();
     cts
 }
 
