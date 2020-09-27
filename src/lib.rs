@@ -7,13 +7,11 @@ use tiny_keccak::Keccak;
 use num_bigint::{BigInt, Sign};
 use num_traits::Zero;
 
-const SEED: &str = "mimc";
-
 pub struct Constants {
     // seed_hash: BigInt,
     // iv: BigInt,
     r: BigInt,
-    n_rounds: i64,
+    n_rounds: u16,
     cts: Vec<BigInt>,
 }
 
@@ -21,46 +19,41 @@ pub fn modulus(a: &BigInt, m: &BigInt) -> BigInt {
     ((a % m) + m) % m
 }
 
-pub fn generate_constants() -> Constants {
+/// IV is SHA3-256 of the seed
+pub fn generate_iv(seed: &[u8]) -> [u8; 32] {
+    let mut keccak = Keccak::new_keccak256();
+    let mut h_iv = [0u8; 32];
+    keccak.update(seed);
+    keccak.finalize(&mut h_iv);
+    h_iv
+}
+
+pub fn generate_constants(seed: &[u8], n_rounds: u16) -> Constants {
     let r: BigInt = BigInt::parse_bytes(
         b"21888242871839275222246405745257275088548364400416034343698204186575808495617",
         10,
     )
     .unwrap();
 
-    let mut keccak = Keccak::new_keccak256();
-    let mut h = [0u8; 32];
-    keccak.update(SEED.as_bytes());
-    keccak.finalize(&mut h);
-    let mut keccak = Keccak::new_keccak256();
-    let mut h_iv = [0u8; 32];
-    let seed_iv = format!("{}{}", SEED, "_iv");
-    keccak.update(seed_iv.as_bytes());
-    keccak.finalize(&mut h_iv);
-
     // let seed_hash: BigInt = BigInt::from_bytes_be(Sign::Plus, &h);
     // let c: BigInt = BigInt::from_bytes_be(Sign::Plus, &h_iv);
     // let iv: BigInt = c % &r;
-    let n_rounds: i64 = 91;
-    let cts = get_constants(&r, SEED, n_rounds);
+    let cts = get_constants(&r, seed, n_rounds);
 
     Constants {
         // seed_hash: seed_hash,
         // iv: iv,
-        r: r,
-        n_rounds: n_rounds,
-        cts: cts,
+        r,
+        n_rounds,
+        cts,
     }
 }
 
-pub fn get_constants(r: &BigInt, seed: &str, n_rounds: i64) -> Vec<BigInt> {
+pub fn get_constants(r: &BigInt, seed: &[u8], n_rounds: u16) -> Vec<BigInt> {
     let mut cts: Vec<BigInt> = Vec::new();
     cts.push(Zero::zero());
 
-    let mut keccak = Keccak::new_keccak256();
-    let mut h = [0u8; 32];
-    keccak.update(seed.as_bytes());
-    keccak.finalize(&mut h);
+    let h = generate_iv(seed);
 
     let mut c = BigInt::from_bytes_be(Sign::Plus, &h);
     for _ in 1..n_rounds {
@@ -83,8 +76,8 @@ pub fn get_constants(r: &BigInt, seed: &str, n_rounds: i64) -> Vec<BigInt> {
     cts
 }
 
-pub fn mimc7_hash_generic(r: &BigInt, x_in: &BigInt, k: &BigInt, n_rounds: i64) -> BigInt {
-    let cts = get_constants(r, SEED, n_rounds);
+pub fn mimc7_hash_generic(r: &BigInt, x_in: &BigInt, k: &BigInt, seed: &[u8], n_rounds: u16) -> BigInt {
+    let cts = get_constants(r, seed, n_rounds);
     let mut h: BigInt = Zero::zero();
     for i in 0..n_rounds as usize {
         let mut t: BigInt;
@@ -102,10 +95,10 @@ pub fn mimc7_hash_generic(r: &BigInt, x_in: &BigInt, k: &BigInt, n_rounds: i64) 
     modulus(&(h + k), &r)
 }
 
-pub fn hash_generic(iv: BigInt, arr: Vec<BigInt>, r: BigInt, n_rounds: i64) -> BigInt {
+pub fn hash_generic(iv: BigInt, arr: Vec<BigInt>, r: BigInt, seed: &[u8], n_rounds: u16) -> BigInt {
     let mut h: BigInt = iv;
     for i in 0..arr.len() {
-        h = mimc7_hash_generic(&r, &h, &arr[i], n_rounds);
+        h = mimc7_hash_generic(&r, &h, &arr[i], seed, n_rounds);
     }
     h
 }
@@ -131,9 +124,9 @@ pub struct Mimc7 {
 }
 
 impl Mimc7 {
-    pub fn new() -> Mimc7 {
+    pub fn new(seed: &[u8], n_rounds: u16) -> Mimc7 {
         Mimc7 {
-            constants: generate_constants(),
+            constants: generate_constants(seed, n_rounds),
         }
     }
 
@@ -187,6 +180,8 @@ mod tests {
     use super::*;
     use rustc_hex::ToHex;
 
+    const SEED: &str = "mimc";
+
     #[test]
     fn test_sha3() {
         let mut keccak = Keccak::new_keccak256();
@@ -210,7 +205,7 @@ mod tests {
     }
     #[test]
     fn test_generate_constants() {
-        let constants = generate_constants();
+        let constants = generate_constants(SEED.as_bytes(),91);
         assert_eq!(
             "20888961410941983456478427210666206549300505294776164667214940546594746570981",
             constants.cts[1].to_string()
@@ -221,8 +216,8 @@ mod tests {
     fn test_mimc7_generic() {
         let b1: BigInt = BigInt::parse_bytes(b"1", 10).unwrap();
         let b2: BigInt = BigInt::parse_bytes(b"2", 10).unwrap();
-        let constants = generate_constants();
-        let h1 = mimc7_hash_generic(&constants.r, &b1, &b2, 91);
+        let constants = generate_constants(SEED.as_bytes(), 91);
+        let h1 = mimc7_hash_generic(&constants.r, &b1, &b2, SEED.as_bytes(),91);
         assert_eq!(
             h1.to_string(),
             "10594780656576967754230020536574539122676596303354946869887184401991294982664"
@@ -239,7 +234,7 @@ mod tests {
 
         let mut big_arr0: Vec<BigInt> = Vec::new();
         big_arr0.push(r_0.clone());
-        let mimc7 = Mimc7::new();
+        let mimc7 = Mimc7::new(SEED.as_bytes(),91);
         let h0 = mimc7.hash(big_arr0);
         assert_eq!(h0.is_err(), true);
 
@@ -251,7 +246,7 @@ mod tests {
 
         let mut big_arr1: Vec<BigInt> = Vec::new();
         big_arr1.push(r_1.clone());
-        let mimc7 = Mimc7::new();
+        let mimc7 = Mimc7::new(SEED.as_bytes(),91);
         let h1 = mimc7.hash(big_arr1);
         assert_eq!(h1.is_err(), false);
         assert_eq!(
@@ -269,7 +264,7 @@ mod tests {
 
         let mut big_arr1: Vec<BigInt> = Vec::new();
         big_arr1.push(b12.clone());
-        let mimc7 = Mimc7::new();
+        let mimc7 = Mimc7::new(SEED.as_bytes(),91);
         let h1 = mimc7.hash(big_arr1).unwrap();
         let (_, h1_bytes) = h1.to_bytes_be();
         assert_eq!(
@@ -309,7 +304,7 @@ mod tests {
         big_arr1.push(b45.clone());
         big_arr1.push(b78.clone());
         big_arr1.push(b41.clone());
-        let mimc7 = Mimc7::new();
+        let mimc7 = Mimc7::new(SEED.as_bytes(),91);
         let h1 = mimc7.hash(big_arr1).unwrap();
         let (_, h1_bytes) = h1.to_bytes_be();
         assert_eq!(
@@ -320,7 +315,7 @@ mod tests {
     #[test]
     fn test_hash_bytes() {
         let msg = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-        let mimc7 = Mimc7::new();
+        let mimc7 = Mimc7::new(SEED.as_bytes(),91);
         let h = mimc7.hash_bytes(msg.as_bytes().to_vec()).unwrap();
         assert_eq!(
             h.to_string(),
