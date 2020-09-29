@@ -9,7 +9,6 @@ use ff::*;
 pub struct Fr(FrRepr);
 
 pub struct Constants {
-    r: Fr,
     n_rounds: i64,
     cts: Vec<Fr>,
 }
@@ -109,10 +108,6 @@ pub fn load_constants() -> Constants {
         "18979889247746272055963929241596362599320706910852082477600815822482192194401",
         "13602139229813231349386885113156901793661719180900395818909719758150455500533",
     ];
-    let r: Fr = Fr::from_str(
-        "21888242871839275222246405745257275088548364400416034343698204186575808495617",
-    )
-    .unwrap();
     let n_rounds: i64 = 91;
 
     let mut cts: Vec<Fr> = Vec::new();
@@ -121,7 +116,6 @@ pub fn load_constants() -> Constants {
         cts.push(n);
     }
     Constants {
-        r: r,
         n_rounds: n_rounds,
         cts: cts,
     }
@@ -159,14 +153,13 @@ impl Mimc7 {
                 t.add_assign(&k);
                 t.add_assign(&self.constants.cts[i]);
             }
-            let mut t5 = t.clone();
-            t5.mul_assign(&t);
-            t5.mul_assign(&t);
-            t5.mul_assign(&t);
-            t5.mul_assign(&t);
-            t5.mul_assign(&t);
-            t5.mul_assign(&t);
-            h = t5.clone();
+            let mut t2 = t.clone();
+            t2.square();
+            let mut t7 = t2.clone();
+            t7.square();
+            t7.mul_assign(&t2);
+            t7.mul_assign(&t);
+            h = t7.clone();
         }
         h.add_assign(&k);
         h

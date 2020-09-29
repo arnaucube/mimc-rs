@@ -90,9 +90,6 @@ fn main() {
         println!("  {:?},", c.cts[i].to_string());
     }
     println!("];");
-    println!("let r: Fr = Fr::from_str(");
-    println!("  {:?},", c.r.to_string());
-    println!(").unwrap();");
     println!("let n_rounds: i64 = {:?};", c.n_rounds);
 }
 
