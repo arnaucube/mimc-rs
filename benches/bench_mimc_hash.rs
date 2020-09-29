@@ -20,7 +20,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     big_arr.push(b2.clone());
     let mimc7 = Mimc7::new();
 
-    c.bench_function("hash", |b| b.iter(|| mimc7.hash(big_arr.clone()).unwrap()));
+    c.bench_function("hash", |b| b.iter(|| mimc7.hash(big_arr.clone())));
 }
 
 criterion_group!(benches, criterion_benchmark);
