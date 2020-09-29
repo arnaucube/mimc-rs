@@ -1,6 +1,6 @@
 [package]
 name = "mimc-rs"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["arnaucube <root@arnaucube.com>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -9,8 +9,12 @@ repository = "https://github.com/arnaucube/mimc-rs"
 readme = "README.md"
 
 [dependencies]
-num = "0.2.0"
-num-bigint = "0.2.2"
-num-traits = "0.2.8"
-tiny-keccak = "1.5"
-rustc-hex = "1.0.0"
+ff = {package="ff_ce" , version="0.11", features = ["derive"]}
+rand = "0.4"
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "bench_mimc_hash"
+harness = false
