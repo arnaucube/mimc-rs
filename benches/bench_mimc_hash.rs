@@ -15,12 +15,9 @@ fn criterion_benchmark(c: &mut Criterion) {
         "12242166908188651009877250812424843524687801523336557272219921456462821518061",
     )
     .unwrap();
-    let mut big_arr: Vec<Fr> = Vec::new();
-    big_arr.push(b1.clone());
-    big_arr.push(b2.clone());
-    let mimc7 = Mimc7::new();
+    let mimc7 = Mimc7::new(91);
 
-    c.bench_function("hash", |b| b.iter(|| mimc7.hash(big_arr.clone())));
+    c.bench_function("hash", |b| b.iter(|| mimc7.hash(&b1, &b2)));
 }
 
 criterion_group!(benches, criterion_benchmark);

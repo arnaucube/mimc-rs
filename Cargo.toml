@@ -11,6 +11,9 @@ readme = "README.md"
 [dependencies]
 ff = {package="ff_ce" , version="0.11", features = ["derive"]}
 rand = "0.4"
+num = "0.2.0"
+num-bigint = "0.2.2"
+tiny-keccak = "1.5"
 
 [dev-dependencies]
 criterion = "0.3"
